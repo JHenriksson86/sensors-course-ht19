@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+
+<node name="scanner_processor" pkg="sensors_lab3_2018" type="sensors_lab3_2018_node" output="screen">
+    <param name="outfile" value="$(find sensors_lab3_2018)/output.txt"/>
+</node>
+
+</launch>
