@@ -90,9 +90,11 @@ const short LEFT_MOTOR=0;
 const short RIGHT_MOTOR=1;
 
 //timers
-long t_new, t_old, t_old_comm, t_old_serial;
-int dT = 10000; //sampling time in microseconds
-int dT_serial = 50000; //sampling time for output in microseconds
+unsigned long t_new, t_old, t_old_comm, t_old_serial;
+
+const unsigned long dT = 10000L;                  //sampling time in microseconds
+const unsigned long dT_serial = 50000L;           //sampling time for output in microseconds
+const unsigned long dT_velcmd = 500000L;          //timeout of velocity command 
 
 //velocity filtering parameter
 float alpha = 0.05;
@@ -161,8 +163,11 @@ void loop()
   //spin and check if we should publish
   t_new = micros();
   nh.spinOnce();
-  if (abs(t_new - t_old_serial) > dT_serial) {
-    
+
+  //Check if it's time to publish new MotorStates message.
+  unsigned long serial_time_elapsed = timeElapsed(t_new, t_old_serial);
+  if (serial_time_elapsed > dT_serial)
+  { 
     //Update time stamp
     state.header.stamp.nsec += (t_new - t_old_serial) * 1000;
     if(state.header.stamp.nsec > 1000000000){
@@ -196,9 +201,9 @@ void loop()
   }
   
   //Do nothing if the sampling period didn't pass yet
-  if (abs(t_new - t_old) < dT)
+  unsigned long time_elapsed = timeElapsed(t_new, t_old);
+  if (time_elapsed < dT)
     return;
-  t_old = t_new;
   
   //calculate new encoder velocity and position
   updateEncoder(left_encoder);
@@ -224,7 +229,14 @@ void loop()
   // actuate motors using setMotorPwm
   Encoder_1.setMotorPwm(left_motor_pwm);
   Encoder_2.setMotorPwm(right_motor_pwm);
+
+  t_old = t_new;
+}
+
+unsigned long timeElapsed(unsigned long new_time, unsigned long old_time){
+  unsigned long time_elapsed = new_time - old_time;
   
+  return time_elapsed;
 }
 
 int clampPwm(int motor_pwm){
