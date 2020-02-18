@@ -68,7 +68,7 @@ struct EncoderState {
 //the maximum value we can command the motor
 const short MAX_PWM_MEGAPI = 255;
 //values bellow this do not make the motor move, so we can clamp them
-const short MIN_ACTUATION_PWM = 10;
+const short MIN_ACTUATION_PWM = 20;
 //TODO: set correct value for ticks per radian 
 const float ENC_TICKS = 368 / (2 * PI); 
 
@@ -76,14 +76,14 @@ const float ENC_TICKS = 368 / (2 * PI);
 MeEncoderOnBoard Encoder_1(SLOT1);
 MeEncoderOnBoard Encoder_2(SLOT4);
 
-  PIDParameters* pid_left_vc = new PIDParameters(1.0, 0.0, 0.0, MAX_PWM_MEGAPI, -MAX_PWM_MEGAPI, 0.0);  //Velocity controller PID parameters for Motor 0
-  PIDParameters* pid_right_vc = new PIDParameters(1.0, 0.0, 0.0, MAX_PWM_MEGAPI, -MAX_PWM_MEGAPI, 0.0); //Velocity controller PID parameters for Motor 1
+PIDParameters* pid_left_vc = new PIDParameters(1.0, 0.0, 0.0, MAX_PWM_MEGAPI, -MAX_PWM_MEGAPI, 0.0);  //Velocity controller PID parameters for Motor 0
+PIDParameters* pid_right_vc = new PIDParameters(1.0, 0.0, 0.0, MAX_PWM_MEGAPI, -MAX_PWM_MEGAPI, 0.0); //Velocity controller PID parameters for Motor 1
   
-  MotorState* left_motor_state = new MotorState(0.0,0,0,0);   //accumulator for left motor
-  MotorState* right_motor_state = new MotorState(0.0,0,0,0);  //accumulator for right motor
+MotorState* left_motor_state = new MotorState(0.0,0,0,0);   //accumulator for left motor
+MotorState* right_motor_state = new MotorState(0.0,0,0,0);  //accumulator for right motor
   
-  EncoderState* left_encoder = new EncoderState(0,ENC_TICKS,0,0);
-  EncoderState* right_encoder = new EncoderState(0,ENC_TICKS,0,0);
+EncoderState* left_encoder = new EncoderState(0,ENC_TICKS,0,0);
+EncoderState* right_encoder = new EncoderState(0,ENC_TICKS,0,0);
 
 //ids of the two motors
 const short LEFT_MOTOR=0;
@@ -240,10 +240,12 @@ unsigned long timeElapsed(unsigned long new_time, unsigned long old_time){
 }
 
 int clampPwm(int motor_pwm){
-  if(abs(motor_pwm) < 50)
+  if(motor_pwm < MIN_ACTUATION_PWM && motor_pwm > -MIN_ACTUATION_PWM)
     return 0;
-  else if(abs(motor_pwm) > 255)
-    return 255;
+  else if(motor_pwm > MAX_PWM_MEGAPI)
+    return MAX_PWM_MEGAPI;
+  else if(motor_pwm < -MAX_PWM_MEGAPI)
+    return -MAX_PWM_MEGAPI;
   return motor_pwm;
 }
 
@@ -330,11 +332,11 @@ void isr_process_encoder2(void)
 
   float pid(float e, float de, PIDParameters* p){
     //update the integral term
-    p->I_ += e;
+    p->I_ += e;  
     
     //compute the control value
-    float samplingTime = (float)dT / 1000000.0;
-    float control_value = p->Kp_ * e + p->Ki_ * p->I_ * samplingTime + p->Kd_ * de / samplingTime;
+    float samplingTime = ((float)timeElapsed(t_new, t_old)) / 1000000.0;
+    float control_value = p->Kp_ * e + p->Ki_ * p->I_ + p->Kd_ * de / samplingTime;
     
     //clamp the control value and back-calculate the integral term (the latter to avoid windup)
     if(control_value >= p->u_max_){
@@ -344,6 +346,10 @@ void isr_process_encoder2(void)
     else if(control_value <= p->u_min_){
       control_value = p->u_min_;
       p->I_ -= e;
+    }
+    else if(control_value < MIN_ACTUATION_PWM && control_value > -MIN_ACTUATION_PWM){
+      control_value = 0.0;
+      p->I_ = 0.0;
     }
     
     return control_value;
